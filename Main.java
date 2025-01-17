@@ -5,7 +5,7 @@ import java.util.*;
 abstract class Person {
     protected String firstName;
     protected String lastName;
-
+    public abstract String getLastName();
     public abstract void display();
 }
 
@@ -149,7 +149,7 @@ class CheckResult {
 }
 
 // Шаблонный класс Container
-class Container<T> {
+class Container<T extends Person & Identifiable> {
     private List<T> items = new ArrayList<>();
 
     public void addItem(T item) {
@@ -159,32 +159,47 @@ class Container<T> {
     public T getItem(int index) {
         return items.get(index);
     }
+
+    public List<T> getItems() {
+        return items;
+    }
+    // Сортировка
+    public void sortByLastName() {
+        Collections.sort(items, Comparator.comparing(Person::getLastName));
+    }
+
+    public T findById(String id) {
+        for (T item : items) {
+            if (item.getId().equals(id)) {
+                return item;
+            }
+        }
+        return null; // Не найден
+    }
 }
 
 // Класс Game
 class Game {
     private static final int RESIDENTS_COUNT = 5;
-    private Resident[] residents;
-    private int residentCount;
+    private Container<Resident> residentContainer;
 
     public Game() {
-        residents = new Resident[RESIDENTS_COUNT];
-        residentCount = 0;
+        residentContainer = new Container<>();
         initializeResidents();
     }
 
     private void initializeResidents() {
         // Блок try
         try (Scanner scanner = new Scanner(new File("D:/JAVA_PROGA/Classi/residents2.txt"))) {
-            while (scanner.hasNextLine() && residentCount < RESIDENTS_COUNT) {
+            while (scanner.hasNextLine() && residentContainer.getItems().size() < RESIDENTS_COUNT) {
                 String[] data = scanner.nextLine().split(" ");
                 if (data.length != 6) {
                     // Блок throw
                     throw new IllegalArgumentException("Неверное количество данных для жильца.");
                 }
-                residents[residentCount] = new Resident();
-                residents[residentCount].setResident(data[0], data[1], data[2], data[3], data[4], data[5]);
-                residentCount++;
+                Resident resident = new Resident();
+                resident.setResident(data[0], data[1], data[2], data[3], data[4], data[5]);
+                residentContainer.addItem(resident);
             }
         } // Блок catch
         catch (FileNotFoundException e) {
@@ -195,7 +210,7 @@ class Game {
             System.err.println(e.getMessage());
             System.exit(1);
         }
-        if (residentCount == 0) {
+        if (residentContainer.getItems().isEmpty()) {
             System.out.println("Ой. Похоже, что в этом доме ещё никто не живёт!");
             System.exit(1);
         }
@@ -217,10 +232,10 @@ class Game {
         visitor.setVisitor(first, last, id, hair, cloth);
     }
 
-    static CheckResult checkVisitor(Resident[] residents, VisitorPass visitor, int chel) {
+    static CheckResult checkVisitor(Container<Resident> residents, VisitorPass visitor, int chel) {
         CheckResult result = new CheckResult();
 
-        Resident resident = residents[chel];
+        Resident resident = residents.getItem(chel);
         if (!resident.getFirstName().equals(visitor.getFirstName())) {
             result.discrepancyReason = "Неправильное имя";
         } else if (!resident.getLastName().equals(visitor.getLastName())) {
@@ -251,20 +266,21 @@ class Game {
             VisitorPass visitor = new VisitorPass();
 
             while (true) {
-                int chel = new Random().nextInt(RESIDENTS_COUNT); // 0, 1, 2, 3, 4
+                int chel = new Random().nextInt(residentContainer.getItems().size()); // 0, 1, 2, 3, 4
                 System.out.println(chel);
                 int f = 0;
 
                 // Ввод данных пришедшего жильца
                 Game.inputVisitorPass(visitor);
 
-                CheckResult result = checkVisitor(residents, visitor, chel);
+                CheckResult result = checkVisitor(residentContainer, visitor, chel);
                 if (result.isMatch == 1) {
                     System.out.println("Данные совпадают. Допуск разрешён.");
                     System.out.print("Вы хотите позвонить в квартиру жильца? (y/n): ");
                     char zvon = scanner.next().charAt(0);
                     if (zvon == 'y' || zvon == 'Y') {
-                        callResident(residents[chel], f);
+                        // Использование контейнера
+                        callResident(residentContainer.getItem(chel), f);
                     }
                     System.out.print("Вы хотите его пропустить? (y/n): ");
                     char prop = scanner.next().charAt(0);
@@ -278,10 +294,11 @@ class Game {
                     System.out.print("Вы хотите позвонить в квартиру жильца? (y/n): ");
                     char zvon = scanner.next().charAt(0);
                     if (zvon == 'y' || zvon == 'Y') {
-                        int residentIndex = findResidentById(visitor.getId());
-                        if (residentIndex != -1) {
+                        // Использование контейнера
+                        Resident foundResident = residentContainer.findById(visitor.getId());
+                        if (foundResident != null) {
                             f = 1;
-                            callResident(residents[chel], f);
+                            callResident(residentContainer.getItem(chel), f);
                         } else {
                             System.out.printf("Не удалось найти жильца с ID %s.\n", visitor.getId());
                         }
@@ -352,15 +369,6 @@ class Game {
         } else {
             System.out.println("Ответа нет.");
         }
-    }
-
-    private int findResidentById(String id) {
-        for (int i = 0; i < residentCount; i++) {
-            if (residents[i].getId().equals(id)) {
-                return i; // Возвращаем индекс жильца с совпадающим ID
-            }
-        }
-        return -1; // Нет совпадения
     }
 
     private void readResults() {
